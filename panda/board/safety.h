@@ -4,7 +4,7 @@
 #include "safety/safety_defaults.h"
 //#include "safety/safety_honda.h"
 //#include "safety/safety_toyota.h"
-//#include "safety/safety_tesla.h"
+#include "safety/safety_tesla.h"
 #include "safety/safety_gm.h"
 //#include "safety/safety_ford.h"
 #include "safety/safety_hyundai.h"
@@ -246,8 +246,8 @@ const safety_hook_config safety_hook_registry[] = {
   {SAFETY_HYUNDAI, &hyundai_hooks},
   {SAFETY_NOOUTPUT, &nooutput_hooks},
   {SAFETY_HYUNDAI_LEGACY, &hyundai_legacy_hooks},
-#ifdef ALLOW_DEBUG
   //{SAFETY_TESLA, &tesla_hooks},
+#ifdef ALLOW_DEBUG
   //{SAFETY_SUBARU_LEGACY, &subaru_legacy_hooks},
   //{SAFETY_VOLKSWAGEN_PQ, &volkswagen_pq_hooks},
   {SAFETY_ALLOUTPUT, &alloutput_hooks},
@@ -345,7 +345,7 @@ bool max_limit_check(int val, const int MAX_VAL, const int MIN_VAL) {
 // check that commanded value isn't too far from measured
 bool dist_to_meas_check(int val, int val_last, struct sample_t *val_meas,
   const int MAX_RATE_UP, const int MAX_RATE_DOWN, const int MAX_ERROR) {
-  // ajouatom: ÃÊ±âÈ­°¡ ¾ÈµÈ°æ¿ì¿¡´Â °Ë»çÇÏÁö ¸»ÀÚ.
+  // ajouatom: ì´ˆê¸°í™”ê°€ ì•ˆëœê²½ìš°ì—ëŠ” ê²€ì‚¬í•˜ì§€ ë§ì.
   if (val == 0 || val_last == 0) return false;
 
   // *** val rate limit check ***
@@ -370,7 +370,7 @@ bool dist_to_meas_check(int val, int val_last, struct sample_t *val_meas,
 bool driver_limit_check(int val, int val_last, struct sample_t *val_driver,
   const int MAX_VAL, const int MAX_RATE_UP, const int MAX_RATE_DOWN,
   const int MAX_ALLOWANCE, const int DRIVER_FACTOR) {
-  // ajouatom: ÃÊ±âÈ­°¡ ¾ÈµÈ°æ¿ì¿¡´Â °Ë»çÇÏÁö ¸»ÀÚ.
+  // ajouatom: ì´ˆê¸°í™”ê°€ ì•ˆëœê²½ìš°ì—ëŠ” ê²€ì‚¬í•˜ì§€ ë§ì.
   if (val == 0 || val_last == 0) return false;
 
   int highest_allowed_rl = MAX(val_last, 0) + MAX_RATE_UP;
@@ -399,7 +399,7 @@ bool driver_limit_check(int val, int val_last, struct sample_t *val_driver,
 // real time check, mainly used for steer torque rate limiter
 bool rt_rate_limit_check(int val, int val_last, const int MAX_RT_DELTA) {
 
-  // ajouatom: ÃÊ±âÈ­°¡ ¾ÈµÈ°æ¿ì¿¡´Â °Ë»çÇÏÁö ¸»ÀÚ.
+  // ajouatom: ì´ˆê¸°í™”ê°€ ì•ˆëœê²½ìš°ì—ëŠ” ê²€ì‚¬í•˜ì§€ ë§ì.
   if (val == 0 || val_last == 0) return false;
   // *** torque real time rate limit check ***
   int highest_val = MAX(val_last, 0) + MAX_RT_DELTA;
