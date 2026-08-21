@@ -89,6 +89,16 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/offroad/icon_shell.png",
     },
     {
+      "TeslaFSD14Override",
+      tr("Tesla: Force FSD14 Steering Type"),
+      tr("Experimental Tesla Model Y/3 port only. This fork's firmware auto-detection for "
+         "Tesla is unreliable (see TESLA_PORT_README.md), so it may fail to notice a real "
+         "FSD14-firmware car. Turn this ON only if you've checked your EPS firmware version "
+         "against FSD_14_FW in values.py yourself and confirmed you're on FSD14. Leave OFF "
+         "otherwise -- this never turns detection off, only forces it on."),
+      "../assets/offroad/icon_shell.png",
+    },
+    {
       "OpkrEnableLogger",
       tr("Enable Driving Log Record"),
       tr("Record the driving log locally for data analysis. Only loggers are activated and not uploaded to the server."),
