@@ -256,6 +256,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"OpkrDrivingRecord", PERSISTENT},
     {"OpkrTurnSteeringDisable", PERSISTENT},
     {"CarModel", PERSISTENT},
+    {"TeslaFSD14Override", PERSISTENT},
     {"OpkrHotspotOnBoot", PERSISTENT},
     {"OpkrSSHLegacy", PERSISTENT},
     {"CruiseOverMaxSpeed", PERSISTENT},
