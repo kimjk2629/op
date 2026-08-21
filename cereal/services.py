@@ -69,6 +69,7 @@ services = {
   "liveNaviData": (False, 0.),
   "liveENaviData": (False, 0.),
   "liveMapData": (False, 0.),
+  "roadLimitSpeed": (False, 0.),
   # debug
   "testJoystick": (False, 0.),
 }
