@@ -12,11 +12,15 @@ Ecu = car.CarParams.Ecu
 
 
 class CAR:
-  AP1_MODELS = 'TESLA AP1 MODEL S'
-  AP2_MODELS = 'TESLA AP2 MODEL S'
+  AP1_MODELS = "TESLA AP1 MODEL S"
+  AP2_MODELS = "TESLA AP2 MODEL S"
   # HW3/HW4 "party bus" integration (community port from carrot-wip, unverified on this fork)
-  TESLA_MODEL_Y = 'TESLA MODEL Y'
-  TESLA_MODEL_3 = 'TESLA MODEL 3'
+  TESLA_MODEL_Y = "TESLA MODEL Y"
+  TESLA_MODEL_3 = "TESLA MODEL 3"
+  # NOTE: quotes are double (not single) on purpose -- launch_chffrplus.sh generates
+  # /data/params/d/CarList (the manual car-selector dropdown's data source) by grepping
+  # values.py files for the literal pattern `= "`. Single-quoted strings are invisible to
+  # that grep and silently never appear in the dropdown, regardless of what's in CAR_INFO.
 
 
 CAR_INFO: Dict[str, Union[CarInfo, List[CarInfo]]] = {
