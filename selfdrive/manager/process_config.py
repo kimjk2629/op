@@ -25,6 +25,7 @@ procs = [
   #NativeProcess("loggerd", "selfdrive/loggerd", ["./loggerd"]),
   NativeProcess("modeld", "selfdrive/modeld", ["./modeld"]),
   #NativeProcess("navd", "selfdrive/ui/navd", ["./navd"], enabled=(PC or TICI or EON), persistent=True),
+  PythonProcess("road_speed_limiter", "selfdrive.road_speed_limiter", enabled=EON, persistent=True),
   NativeProcess("proclogd", "selfdrive/proclogd", ["./proclogd"]),
   NativeProcess("sensord", "selfdrive/sensord", ["./sensord"], enabled=not PC, persistent=EON, sigkill=EON),
   NativeProcess("ubloxd", "selfdrive/locationd", ["./ubloxd"], enabled=(not PC or WEBCAM)),
