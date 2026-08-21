@@ -1,24 +1,48 @@
 import copy
 from cereal import car
 from common.conversions import Conversions as CV
-from selfdrive.car.tesla.values import DBC, CANBUS, GEAR_MAP, DOORS, BUTTONS
+from selfdrive.car.tesla.values import DBC, CANBUS, GEAR_MAP, DOORS, BUTTONS, CAR, STEER_THRESHOLD
 from selfdrive.car.interfaces import CarStateBase
 from opendbc.can.parser import CANParser
 from opendbc.can.can_define import CANDefine
 
+MODEL_Y_3 = (CAR.TESLA_MODEL_Y, CAR.TESLA_MODEL_3)
+
+
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
-    self.button_states = {button.event_type: False for button in BUTTONS}
-    self.can_define = CANDefine(DBC[CP.carFingerprint]['chassis'])
+    self.is_model_y_3 = CP.carFingerprint in MODEL_Y_3
+
+    if self.is_model_y_3:
+      self.can_define = CANDefine(DBC[CP.carFingerprint]['party'])
+    else:
+      self.can_define = CANDefine(DBC[CP.carFingerprint]['chassis'])
+      self.button_states = {button.event_type: False for button in BUTTONS}
 
     # Needed by carcontroller
     self.msg_stw_actn_req = None
     self.hands_on_level = 0
     self.steer_warning = None
     self.acc_state = 0
+    self.das_control = None
+    self.das_accCancel = False
+    self.cruise_override = False
+
+    # party-bus (Model Y/3) only
+    self.summon = False
+    self.summon_prev = False
+    self.cruise_enabled_prev = False
 
   def update(self, cp, cp_cam):
+    if self.is_model_y_3:
+      return self.update_model_y_3(cp, cp_cam)
+    return self.update_ap1_ap2(cp, cp_cam)
+
+  # ------------------------------------------------------------------
+  # AP1 / AP2 Model S (full-bypass harness) -- unchanged from upstream
+  # ------------------------------------------------------------------
+  def update_ap1_ap2(self, cp, cp_cam):
     ret = car.CarState.new_message()
 
     # Vehicle speed
@@ -40,7 +64,7 @@ class CarState(CarStateBase):
     steer_status = self.can_define.dv["EPAS_sysStatus"]["EPAS_eacStatus"].get(int(cp.vl["EPAS_sysStatus"]["EPAS_eacStatus"]), None)
 
     ret.steeringAngleDeg = -cp.vl["EPAS_sysStatus"]["EPAS_internalSAS"]
-    ret.steeringRateDeg = -cp.vl["STW_ANGLHP_STAT"]["StW_AnglHP_Spd"] # This is from a different angle sensor, and at different rate
+    ret.steeringRateDeg = -cp.vl["STW_ANGLHP_STAT"]["StW_AnglHP_Spd"]  # This is from a different angle sensor, and at different rate
     ret.steeringTorque = -cp.vl["EPAS_sysStatus"]["EPAS_torsionBarTorque"]
     ret.steeringPressed = (self.hands_on_level > 0)
     ret.steerFaultPermanent = steer_status == "EAC_FAULT"
@@ -58,7 +82,7 @@ class CarState(CarStateBase):
     elif speed_units == "MPH":
       ret.cruiseState.speed = cp.vl["DI_state"]["DI_digitalSpeed"] * CV.MPH_TO_MS
     ret.cruiseState.available = ((cruise_state == "STANDBY") or ret.cruiseState.enabled)
-    ret.cruiseState.standstill = False # This needs to be false, since we can resume from stop without sending anything special
+    ret.cruiseState.standstill = False  # This needs to be false, since we can resume from stop without sending anything special
 
     # Gear
     ret.gearShifter = GEAR_MAP[self.can_define.dv["DI_torque2"]["DI_gear"].get(int(cp.vl["DI_torque2"]["DI_gear"]), "DI_GEAR_INVALID")]
@@ -93,8 +117,120 @@ class CarState(CarStateBase):
 
     return ret
 
+  # ------------------------------------------------------------------
+  # Model Y / Model 3, HW3/HW4 "party bus" harness.
+  # Ported from carrot-wip (opendbc/car/tesla/carstate.py) on 2026-08-21.
+  # Dropped vs. upstream carrot-wip for this initial port: vehicle-bus / DAS_bodyControls
+  # blinker MITM, 3-finger infotainment LKAS toggle, suspected-FSD14 runtime latch,
+  # wheel speeds, invalidLkasSetting reporting. These are TODOs, not fundamental blockers.
+  # ------------------------------------------------------------------
+  def update_summon_state(self, summon_state, cruise_enabled):
+    summon_now = summon_state in ("ACTIVE", "COMPLETE", "SELFPARK_STARTED")
+    if summon_now and not self.summon_prev and not self.cruise_enabled_prev:
+      self.summon = True
+    if not summon_now:
+      self.summon = False
+    self.summon_prev = summon_now
+    self.cruise_enabled_prev = cruise_enabled
+
+  def update_model_y_3(self, cp, cp_ap):
+    ret = car.CarState.new_message()
+
+    # Vehicle speed
+    ret.vEgoRaw = cp.vl["DI_speed"]["DI_vehicleSpeed"] * CV.KPH_TO_MS
+    ret.vEgo, ret.aEgo = self.update_speed_kf(ret.vEgoRaw)
+
+    # Gas pedal
+    pedal_status = cp.vl["DI_systemStatus"]["DI_accelPedalPos"]
+    ret.gas = pedal_status / 100.0
+    ret.gasPressed = pedal_status > 0
+
+    # Brake pedal
+    ret.brake = 0.0
+    ret.brakePressed = cp.vl["ESP_status"]["ESP_driverBrakeApply"] == 2
+    ret.espDisabled = cp.vl["ESP_status"]["ESP_espFaultLamp"] != 0
+
+    # Steering wheel
+    epas_status = cp.vl["EPAS3S_sysStatus"]
+    self.hands_on_level = epas_status["EPAS3S_handsOnLevel"]
+    ret.steeringAngleDeg = -epas_status["EPAS3S_internalSAS"]
+    ret.steeringTorque = -epas_status["EPAS3S_torsionBarTorque"]
+    ret.steeringPressed = (abs(ret.steeringTorque) > STEER_THRESHOLD)
+
+    eac_status = self.can_define.dv["EPAS3S_sysStatus"]["EPAS3S_eacStatus"].get(int(epas_status["EPAS3S_eacStatus"]), None)
+    ret.steerFaultPermanent = eac_status == "EAC_FAULT"
+    ret.steerFaultTemporary = eac_status == "EAC_INHIBITED"
+
+    # Cruise state
+    cruise_state = self.can_define.dv["DI_state"]["DI_cruiseState"].get(int(cp.vl["DI_state"]["DI_cruiseState"]), None)
+    speed_units = self.can_define.dv["DI_state"]["DI_speedUnits"].get(int(cp.vl["DI_state"]["DI_speedUnits"]), None)
+    acc_state = cp_ap.vl["DAS_control"]["DAS_accState"]
+    self.das_accCancel = acc_state in (0, 1, 2, 12, 13, 14, 15)
+
+    summon_state = self.can_define.dv["DI_state"]["DI_autoparkState"].get(int(cp.vl["DI_state"]["DI_autoparkState"]), None)
+    cruise_enabled = cruise_state in ("ENABLED", "STANDSTILL", "OVERRIDE", "PRE_FAULT", "PRE_CANCEL")
+    self.cruise_override = cruise_state == "OVERRIDE"
+    self.update_summon_state(summon_state, cruise_enabled)
+
+    ret.cruiseState.enabled = cruise_enabled and not self.summon
+    if speed_units == "KPH":
+      ret.cruiseState.speed = cp.vl["DI_state"]["DI_digitalSpeed"] * CV.KPH_TO_MS
+    elif speed_units == "MPH":
+      ret.cruiseState.speed = cp.vl["DI_state"]["DI_digitalSpeed"] * CV.MPH_TO_MS
+    ret.cruiseState.available = cruise_state == "STANDBY" or ret.cruiseState.enabled
+    ret.cruiseState.standstill = False
+    ret.standstill = cruise_state == "STANDSTILL"
+
+    # Gear
+    ret.gearShifter = GEAR_MAP[self.can_define.dv["DI_systemStatus"]["DI_gear"].get(int(cp.vl["DI_systemStatus"]["DI_gear"]), "DI_GEAR_INVALID")]
+
+    # Doors / blinkers / seatbelt
+    ret.doorOpen = cp.vl["UI_warning"]["anyDoorOpen"] == 1
+    ret.leftBlinker = cp.vl["UI_warning"]["leftBlinkerBlinking"] in (1, 2)
+    ret.rightBlinker = cp.vl["UI_warning"]["rightBlinkerBlinking"] in (1, 2)
+    ret.seatbeltUnlatched = cp.vl["UI_warning"]["buckleStatus"] != 1
+
+    # Stock AEB / FCW passthrough for events.py
+    ret.stockAeb = cp_ap.vl["DAS_control"]["DAS_aebEvent"] == 1
+    ret.stockFcw = cp_ap.vl["DAS_status"]["DAS_forwardCollisionWarning"] != 0 if "DAS_status" in cp_ap.vl else False
+
+    # Messages needed by carcontroller
+    self.das_control = copy.copy(cp_ap.vl["DAS_control"])
+
+    return ret
+
   @staticmethod
   def get_can_parser(CP):
+    if CP.carFingerprint in MODEL_Y_3:
+      signals = [
+        ("DI_vehicleSpeed", "DI_speed"),
+        ("DI_accelPedalPos", "DI_systemStatus"),
+        ("DI_gear", "DI_systemStatus"),
+        ("ESP_driverBrakeApply", "ESP_status"),
+        ("ESP_espFaultLamp", "ESP_status"),
+        ("EPAS3S_handsOnLevel", "EPAS3S_sysStatus"),
+        ("EPAS3S_torsionBarTorque", "EPAS3S_sysStatus"),
+        ("EPAS3S_internalSAS", "EPAS3S_sysStatus"),
+        ("EPAS3S_eacStatus", "EPAS3S_sysStatus"),
+        ("DI_cruiseState", "DI_state"),
+        ("DI_digitalSpeed", "DI_state"),
+        ("DI_speedUnits", "DI_state"),
+        ("DI_autoparkState", "DI_state"),
+        ("anyDoorOpen", "UI_warning"),
+        ("leftBlinkerBlinking", "UI_warning"),
+        ("rightBlinkerBlinking", "UI_warning"),
+        ("buckleStatus", "UI_warning"),
+      ]
+      checks = [
+        ("DI_speed", 50),
+        ("DI_systemStatus", 100),
+        ("ESP_status", 50),
+        ("EPAS3S_sysStatus", 100),
+        ("DI_state", 10),
+        ("UI_warning", 10),
+      ]
+      return CANParser(DBC[CP.carFingerprint]['party'], signals, checks, CANBUS.party)
+
     signals = [
       # sig_name, sig_address
       ("ESP_vehicleSpeed", "ESP_B"),
@@ -174,6 +310,18 @@ class CarState(CarStateBase):
 
   @staticmethod
   def get_cam_can_parser(CP):
+    if CP.carFingerprint in MODEL_Y_3:
+      signals = [
+        ("DAS_accState", "DAS_control"),
+        ("DAS_aebEvent", "DAS_control"),
+        ("DAS_forwardCollisionWarning", "DAS_status"),
+      ]
+      checks = [
+        ("DAS_control", 25),
+        ("DAS_status", 2),
+      ]
+      return CANParser(DBC[CP.carFingerprint]['party'], signals, checks, CANBUS.autopilot_party)
+
     signals = [
       # sig_name, sig_address
       ("DAS_accState", "DAS_control"),

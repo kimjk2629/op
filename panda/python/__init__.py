@@ -197,6 +197,11 @@ class Panda:
 
   FLAG_TESLA_POWERTRAIN = 1
   FLAG_TESLA_LONG_CONTROL = 2
+  # Model Y / Model 3 (HW3/HW4 party-bus port) -- new distinct bits, does not touch the
+  # AP1/AP2 flags above. See safety_tesla.h.
+  FLAG_TESLA_MODEL3_Y = 4
+  FLAG_TESLA_MODEL3_Y_LONG_CONTROL = 8
+  FLAG_TESLA_MODEL3_Y_FSD_14 = 16
 
   def __init__(self, serial: Optional[str] = None, claim: bool = True):
     self._serial = serial

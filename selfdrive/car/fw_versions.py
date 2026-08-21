@@ -66,6 +66,17 @@ OBD_VERSION_RESPONSE = b'\x49\x04'
 DEFAULT_RX_OFFSET = 0x8
 VOLKSWAGEN_RX_OFFSET = 0x6a
 
+# Ported from carrot-wip (opendbc/car/fw_query_definitions.py StdQueries) on 2026-08-21, for
+# TESLA_MODEL_Y / TESLA_MODEL_3 FW-based fingerprinting. NOTE: this repo's fingerprint() in
+# car_helpers.py currently queries FW on a single hardcoded bus (bus=1, OBD-II), while the
+# Tesla EPS FW response on the HW3/HW4 party-bus harness arrives on bus 0 -- so this request
+# will likely find nothing unless/until that bus assumption is made per-brand. Until then,
+# force detection with the CarModel param (see TESLA_PORT_README.md) instead of relying on this.
+TESLA_VERSION_REQUEST = bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER]) + \
+  p16(uds.DATA_IDENTIFIER_TYPE.SYSTEM_SUPPLIER_ECU_SOFTWARE_VERSION_NUMBER)
+TESLA_VERSION_RESPONSE = bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER + 0x40]) + \
+  p16(uds.DATA_IDENTIFIER_TYPE.SYSTEM_SUPPLIER_ECU_SOFTWARE_VERSION_NUMBER)
+
 MAZDA_VERSION_REQUEST = bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER]) + \
   p16(uds.DATA_IDENTIFIER_TYPE.VEHICLE_MANUFACTURER_ECU_SOFTWARE_NUMBER)
 MAZDA_VERSION_RESPONSE =  bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER + 0x40]) + \
@@ -92,6 +103,13 @@ SUBARU_VERSION_RESPONSE = bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER + 0x40
 
 # brand, request, response, response offset
 REQUESTS = [
+  # Tesla (TESLA_MODEL_Y / TESLA_MODEL_3, HW3/HW4 party-bus port -- see note above TESLA_VERSION_REQUEST)
+  (
+    "tesla",
+    [TESTER_PRESENT_REQUEST, TESLA_VERSION_REQUEST],
+    [TESTER_PRESENT_RESPONSE, TESLA_VERSION_RESPONSE],
+    DEFAULT_RX_OFFSET,
+  ),
   # Subaru
   (
     "subaru",
