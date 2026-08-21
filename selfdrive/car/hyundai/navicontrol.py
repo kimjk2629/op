@@ -8,6 +8,7 @@ from common.numpy_fast import clip, interp
 from cereal import log
 import cereal.messaging as messaging
 from common.params import Params
+from selfdrive.road_speed_limiter import road_speed_limiter_get_max_speed
 
 import common.log as trace1
 import common.MoveAvg as mvAvg
@@ -33,6 +34,7 @@ class NaviControl():
     self.map_spdlimit_offset = int(Params().get("OpkrSpeedLimitOffset", encoding="utf8"))
     self.map_spdlimit_offset_option = int(Params().get("OpkrSpeedLimitOffsetOption", encoding="utf8"))
     self.safetycam_decel_dist_gain = int(Params().get("SafetyCamDecelDistGain", encoding="utf8"))
+    self.road_speed_limiter_enabled = Params().get_bool("RoadSpeedLimiterEnabled")
 
     self.map_speed_block = False
     self.map_speed_dist = 0
@@ -160,6 +162,29 @@ class NaviControl():
     return btn_signal
 
   def get_navi_speed(self, sm, CS, cruiseState_speed):
+    cruise_set_speed_kph = self._get_navi_speed_base(sm, CS, cruiseState_speed)
+
+    if self.road_speed_limiter_enabled:
+      if CS.is_set_speed_in_mph:
+        cluster_speed = CS.out.vEgo * CV.MS_TO_MPH
+        is_metric = False
+      else:
+        cluster_speed = CS.out.vEgo * CV.MS_TO_KPH
+        is_metric = True
+
+      rsl_speed, rsl_cam_limit, rsl_dist, rsl_first_started, rsl_log = road_speed_limiter_get_max_speed(cluster_speed, is_metric)
+      if rsl_speed > 0:
+        if cruise_set_speed_kph >= cruiseState_speed:
+          # existing OSM/stock-navi camera logic isn't currently reducing speed; adopt the UDP source's target
+          cruise_set_speed_kph = rsl_speed
+        else:
+          # both sources want to slow down; take the more conservative (lower) target
+          cruise_set_speed_kph = min(cruise_set_speed_kph, rsl_speed)
+        self.onSpeedControl = True
+
+    return cruise_set_speed_kph
+
+  def _get_navi_speed_base(self, sm, CS, cruiseState_speed):
     cruise_set_speed_kph = cruiseState_speed
     v_ego_kph = CS.out.vEgo * CV.MS_TO_KPH
     v_ego_mph = CS.out.vEgo * CV.MS_TO_MPH
