@@ -1861,6 +1861,26 @@ struct LiveMapData {
   ref @21 :Text;
 }
 
+struct RoadLimitSpeed {
+  active @0 :Int16;
+  roadLimitSpeed @1 :Int16;
+  isHighway @2 :Bool;
+  camType @3 :Int16;
+  camLimitSpeedLeftDist @4 :Int16;
+  camLimitSpeed @5 :Int16;
+  sectionLimitSpeed @6 :Int16;
+  sectionLeftDist @7 :Int16;
+  camSpeedFactor @8 :Float32;
+  restArea @9 :List(RestArea);
+
+  struct RestArea {
+    image @0 :Text;
+    title @1 :Text;
+    oilPrice @2 :Text;
+    distance @3 :Text;
+  }
+}
+
 struct CameraOdometry {
   frameId @4 :UInt32;
   timestampEof @5 :UInt64;
@@ -2014,6 +2034,7 @@ struct Event {
     liveNaviData @91 :LiveNaviData;
     liveMapData @92: LiveMapData;
     liveENaviData @93: LiveENaviData;
+    roadLimitSpeed @94 :RoadLimitSpeed;
 
     # navigation
     navInstruction @82 :NavInstruction;
