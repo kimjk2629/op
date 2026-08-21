@@ -109,7 +109,41 @@ destabilizing Hyundai FW detection to fix a Tesla-only edge case I can't test.
 
 **Practical workaround**: this fork already supports forcing the detected car via the
 `CarModel` param (see `CAR_NAME = Params().get("CarModel", ...)` in `car_helpers.py`). Set that
-param to `TESLA_MODEL_Y` (or `TESLA_MODEL_3`) to bypass fingerprinting entirely.
+param to `TESLA_MODEL_Y` (or `TESLA_MODEL_3`) to bypass fingerprinting entirely. As of this
+commit, `TESLA MODEL Y` / `TESLA MODEL 3` (and `TESLA AP1/AP2 MODEL S`) also show up in this
+fork's manual car-selector dropdown (Settings) — see "Manual car selector" below for why that
+previously didn't work at all.
+
+Note this same bus-1-only gap also breaks **`FSD_14` auto-detection** (see next section) for
+the same reason: the EPS firmware read it depends on comes back empty.
+
+## Manual car selector didn't show Tesla at all (fixed)
+
+This fork's Settings > car-selector dropdown (`CarSelectCombo` in
+`selfdrive/ui/qt/widgets/opkr.cc`) doesn't read `CAR_INFO` live — it reads a static file,
+`/data/params/d/CarList`, that `launch_chffrplus.sh` regenerates on every boot by grepping
+**only `selfdrive/car/hyundai/values.py`** for lines matching `` = "`` and extracting the
+quoted name. Tesla's `values.py` was never scanned there, and its `CAR` class originally used
+single quotes anyway (invisible to that same grep pattern), so no Tesla entry — old AP1/AP2
+included — could ever appear in that dropdown regardless of what's in `CAR_INFO`. Fixed by
+also grepping `selfdrive/car/tesla/values.py` into the same file, and switching that file's
+`CAR` class to double-quoted strings (source-syntax-only change; the Python string values are
+identical either way). Requires a reboot after updating for `launch_chffrplus.sh` to rerun.
+
+## FSD 14 steering-type manual override
+
+Because of the bus-1-only FW-query gap above, `_get_params_model_y_3()`'s automatic
+`FSD_14` detection (whether the EPS is running "FSD 14"-generation firmware, which flips the
+`DAS_steeringControlType` CAN encoding) will usually silently fail and default to off — even
+on a real FSD-14 car, and especially when using the `CarModel` override, which skips FW-based
+candidate matching entirely.
+
+Added a manual override for this: **Settings > Toggles > "Tesla: Force FSD14 Steering Type"**
+(param `TeslaFSD14Override`, plain on/off, `selfdrive/common/params.cc` /
+`selfdrive/ui/qt/offroad/settings.cc`). Off by default and never forces detection *off* — it
+only ever forces `fsd_14 = True` when enabled, so it can't mask a real positive detection. Only
+turn it on after checking your own EPS firmware version against `FSD_14_FW` in
+`selfdrive/car/tesla/values.py`.
 
 ## Why the safety mode is gated behind `ALLOW_DEBUG`
 
@@ -155,4 +189,7 @@ selfdrive/car/fw_versions.py                                   (modified)
 panda/python/__init__.py                                        (modified)
 panda/board/safety/safety_tesla.h                                 (modified)
 panda/board/safety.h                                                (modified)
+launch_chffrplus.sh                                                  (modified)
+selfdrive/common/params.cc                                            (modified)
+selfdrive/ui/qt/offroad/settings.cc                                    (modified)
 ```
