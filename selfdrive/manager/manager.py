@@ -160,6 +160,7 @@ def manager_init() -> None:
     ("LCTimingFactorEnable", "1"),
     ("AutoEnableSpeed", "9"),
     ("SafetyCamDecelDistGain", "0"),
+    ("RoadSpeedLimiterEnabled", "0"),
     ("OpkrLiveTunePanelEnable", "0"),
     ("RadarLongHelper", "2"),
     ("GitPullOnBoot", "0"),
