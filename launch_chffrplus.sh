@@ -139,6 +139,7 @@ function launch {
   fi
 
   cat /data/openpilot/selfdrive/car/hyundai/values.py | grep ' = "' | awk -F'"' '{print $2}' > /data/params/d/CarList
+  cat /data/openpilot/selfdrive/car/tesla/values.py | grep ' = "' | awk -F'"' '{print $2}' >> /data/params/d/CarList
   
   dongleid=`cat /data/params/d/DongleId`
 
