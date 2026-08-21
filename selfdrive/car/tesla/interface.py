@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from cereal import car
 from panda import Panda
+from common.params import Params
 from selfdrive.car.tesla.values import CANBUS, CAR, TeslaFlags, FSD_14_FW
 from selfdrive.car import STD_CARGO_KG, gen_empty_fingerprint, scale_rot_inertia, scale_tire_stiffness, get_safety_config
 from selfdrive.car.interfaces import CarInterfaceBase
@@ -90,6 +91,22 @@ class CarInterface(CarInterfaceBase):
 
     car_fw = car_fw or []
     fsd_14 = any(fw.ecu == Ecu.eps and fw.fwVersion in FSD_14_FW.get(candidate, []) for fw in car_fw)
+
+    # NOTE: FW-based auto-detection above relies on this fork's FW query, which is hardcoded
+    # to bus=1 (OBD-II) for every brand (see selfdrive/car/fw_versions.py / car_helpers.py).
+    # On the Model Y/3 party-bus harness, the EPS firmware-version response actually arrives
+    # on bus 0, so `car_fw` will usually come back empty here and `fsd_14` will silently stay
+    # False even on a real FSD-14 car -- especially when using the CarModel manual-override
+    # selector, which skips FW-based candidate matching entirely.
+    #
+    # TeslaFSD14Override (Settings > Toggles, a plain on/off param) lets you force this
+    # instead of relying on that unreliable auto-detection. Check your EPS firmware version
+    # against FSD_14_FW in values.py yourself before deciding how to set it. Default (off)
+    # preserves the auto-detect result above -- this only ever turns fsd_14 ON, never forces
+    # it off, so it can't mask a real detection.
+    if Params().get_bool("TeslaFSD14Override"):
+      fsd_14 = True
+
     if fsd_14:
       ret.flags |= TeslaFlags.FSD_14
       safety_param |= Panda.FLAG_TESLA_MODEL3_Y_FSD_14
